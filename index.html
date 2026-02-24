@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/NeuralNetworkTrainingSimulation/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>neuralnetworktrainingsimulation</title>
+  <script type="module" crossorigin src="/NeuralNetworkTrainingSimulation/assets/index-OOyGe7_F.js"></script>
+  <link rel="stylesheet" crossorigin href="/NeuralNetworkTrainingSimulation/assets/index-qaN7R8fa.css">
+</head>
+
+<body>
+  <div id="app">
+    <div id="simulation-container">
+      <canvas id="simulation-canvas"></canvas>
+    </div>
+    <div id="side-panel">
+      <div id="network-container">
+        <canvas id="network-canvas"></canvas>
+      </div>
+      <div id="controls">
+        <button id="btn-toggle-fast">Toggle Fast Training (No Render)</button>
+        <button id="btn-restart">Restart Generation</button>
+        <button id="btn-clear-history" style="background-color: #442222; color: white; margin-top: 5px;">Clear
+          History</button>
+        <div>Generation: <span id="generation-count">1</span></div>
+        <div>Alive: <span id="alive-count">0</span></div>
+        <div>Best Fitness: <span id="best-fitness">0</span></div>
+      </div>
+    </div>
+  </div>
+  <script src="/NeuralNetworkTrainingSimulation/brain-browser.min.js"></script>
+</body>
+
+</html>
