@@ -1,8 +1,8 @@
 // src/Boid.ts
 import { Vector } from './Vector';
 import { getIntersection } from './utils';
-declare const brain: any;
 import { Track } from './Track';
+import type { NeuralNetwork } from './brain-js';
 
 export class Boid {
     pos: Vector;
@@ -33,7 +33,7 @@ export class Boid {
     ];
     sensorLength: number = 100;
 
-    network: any;
+    network: NeuralNetwork;
     lastInputs: number[] = [0, 0, 0, 0, 0];
     lastOutputs: number[] = [0, 0];
 
@@ -64,17 +64,20 @@ export class Boid {
     }
 
     scrambleWeights() {
-        const json = this.network.toJSON() as any;
+        const json = this.network.toJSON();
         for (let i = 0; i < json.layers.length; i++) {
-            if (!json.layers[i].weights) continue;
-            for (let j = 0; j < json.layers[i].weights.length; j++) {
-                for (let k = 0; k < json.layers[i].weights[j].length; k++) {
+            const layer = json.layers[i];
+            if (!layer.weights) continue;
+            for (let j = 0; j < layer.weights.length; j++) {
+                for (let k = 0; k < layer.weights[j].length; k++) {
                     // Random weights between -2 and 2
-                    json.layers[i].weights[j][k] = (Math.random() * 4) - 2;
+                    layer.weights[j][k] = (Math.random() * 4) - 2;
                 }
             }
-            for (let j = 0; j < json.layers[i].biases.length; j++) {
-                json.layers[i].biases[j] = (Math.random() * 4) - 2;
+            if (layer.biases) {
+                for (let j = 0; j < layer.biases.length; j++) {
+                    layer.biases[j] = (Math.random() * 4) - 2;
+                }
             }
         }
         this.network.fromJSON(json);

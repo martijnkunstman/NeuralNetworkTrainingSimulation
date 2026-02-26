@@ -28,8 +28,3 @@ export function getIntersection(A: Vector, B: Vector, C: Vector, D: Vector): Int
     }
     return null;
 }
-
-// Map a value from one range to another
-export function mapRange(val: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
-    return (val - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
-}

@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>neuralnetworktrainingsimulation</title>
+  <title>Neural Network Training Simulation</title>
 </head>
 
 <body>
@@ -22,9 +22,30 @@
         <button id="btn-restart">Restart Generation</button>
         <button id="btn-clear-history" style="background-color: #442222; color: white; margin-top: 5px;">Clear
           History</button>
-        <div>Generation: <span id="generation-count">1</span></div>
-        <div>Alive: <span id="alive-count">0</span></div>
-        <div>Best Fitness: <span id="best-fitness">0</span></div>
+        
+        <div class="control-section">
+          <h4>Track Options</h4>
+          <button id="btn-randomize-track">Randomize Track</button>
+          <div class="checkbox-row">
+            <input type="checkbox" id="auto-randomize">
+            <label for="auto-randomize">Auto-randomize every 10 gen</label>
+          </div>
+          <div class="stat-row">Seed: <span id="track-seed">Default</span></div>
+        </div>
+
+        <div class="control-section">
+          <h4>Brain I/O</h4>
+          <button id="btn-export-brain">Export Brain</button>
+          <button id="btn-import-brain">Import Brain</button>
+        </div>
+
+        <div class="control-section">
+          <h4>Statistics</h4>
+          <div class="stat-row">Generation: <span id="generation-count">1</span></div>
+          <div class="stat-row">Alive: <span id="alive-count">0</span></div>
+          <div class="stat-row">Best Fitness: <span id="best-fitness">0</span></div>
+          <div class="stat-row">Diversity: <span id="diversity-score">0.00</span></div>
+        </div>
       </div>
     </div>
   </div>

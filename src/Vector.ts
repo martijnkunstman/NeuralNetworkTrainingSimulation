@@ -57,10 +57,25 @@ export class Vector {
         return Math.atan2(this.y, this.x);
     }
 
-    rotate(angle: number): Vector {
+    /**
+     * Returns a NEW rotated vector (non-mutating).
+     * Use rotateInPlace() if you need to mutate this vector.
+     */
+    rotated(angle: number): Vector {
         const newHeading = this.heading() + angle;
         const mag = this.mag();
         return new Vector(Math.cos(newHeading) * mag, Math.sin(newHeading) * mag);
+    }
+
+    /**
+     * Rotates this vector in-place (mutating).
+     */
+    rotateInPlace(angle: number): Vector {
+        const newHeading = this.heading() + angle;
+        const mag = this.mag();
+        this.x = Math.cos(newHeading) * mag;
+        this.y = Math.sin(newHeading) * mag;
+        return this;
     }
 
     dist(v: Vector): number {
