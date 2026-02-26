@@ -183,7 +183,9 @@ export class GeneticAlgorithm {
         let best = null;
         let maxFit = -1;
         for (let b of this.boids) {
-            if (!b.isDead && b.fitness > maxFit) {
+            // Select the boid with highest fitness, regardless of alive/dead status
+            // This ensures the best performer is always visualized
+            if (b.fitness > maxFit) {
                 maxFit = b.fitness;
                 best = b;
             }
