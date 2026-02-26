@@ -24,12 +24,10 @@ function init() {
   simulationCanvas = document.getElementById('simulation-canvas') as HTMLCanvasElement;
   networkCanvas = document.getElementById('network-canvas') as HTMLCanvasElement;
 
-  // Set dimensions
-  const simContainer = document.getElementById('simulation-container');
-  if (simContainer) {
-    simulationCanvas.width = simContainer.clientWidth - 40;
-    simulationCanvas.height = simContainer.clientHeight - 40;
-  }
+  // Set fixed square canvas size for consistent track generation
+  const fixedSize = Track.FIXED_SIZE;
+  simulationCanvas.width = fixedSize;
+  simulationCanvas.height = fixedSize;
 
   const netContainer = document.getElementById('network-container');
   if (netContainer) {
@@ -69,7 +67,7 @@ function init() {
 
   // Track randomization button
   document.getElementById('btn-randomize-track')?.addEventListener('click', () => {
-    const newSeed = track.randomize(simulationCanvas.width, simulationCanvas.height);
+    const newSeed = track.randomize(Track.FIXED_SIZE, Track.FIXED_SIZE);
     updateTrackSeedDisplay(newSeed);
     // Reset boids to new start position
     resetBoidsForNewTrack();

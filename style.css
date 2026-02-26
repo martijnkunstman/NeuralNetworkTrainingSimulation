@@ -34,16 +34,21 @@ body {
   background-color: #1a1a1a;
   box-shadow: 2px 0 10px rgba(0,0,0,0.5);
   z-index: 10;
+  overflow: hidden;
 }
 
 #simulation-canvas {
   background-color: #2a2a2a;
   border-radius: 8px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  /* Scale down to fit container while maintaining aspect ratio */
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 #side-panel {
-  width: 350px;
+  width: 450px;
   display: flex;
   flex-direction: column;
   background-color: #2c2c2c;
@@ -52,6 +57,7 @@ body {
 
 #network-container {
   flex: 1;
+  min-height: 400px;
   border-bottom: 1px solid #3c3c3c;
   display: flex;
   flex-direction: column;
@@ -63,6 +69,7 @@ body {
   background-color: #222;
   border-radius: 6px;
   width: 100%;
+  min-height: 350px;
 }
 
 #controls {

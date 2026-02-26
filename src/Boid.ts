@@ -36,6 +36,7 @@ export class Boid {
     network: NeuralNetwork;
     lastInputs: number[] = [0, 0, 0, 0, 0];
     lastOutputs: number[] = [0, 0];
+    lastHiddenActivations: number[][] = [[0, 0, 0, 0], [0, 0, 0, 0]]; // Store activations for hidden layers
 
     constructor(x: number, y: number, startAngle: number) {
         this.pos = new Vector(x, y);
@@ -83,6 +84,37 @@ export class Boid {
         this.network.fromJSON(json);
     }
 
+    /**
+     * Calculate hidden layer activations manually for visualization
+     * brain.js: layers[0] is input placeholder, layers[1] is first hidden
+     */
+    calculateHiddenActivations(inputs: number[]): void {
+        const json = this.network.toJSON();
+        let currentActivations = inputs;
+        
+        // Skip layer 0 (input placeholder), start from layer 1
+        for (let i = 1; i < json.layers.length; i++) {
+            const layer = json.layers[i];
+            if (!layer.weights) continue;
+            
+            const newActivations: number[] = [];
+            for (let j = 0; j < layer.weights.length; j++) {
+                let sum = layer.biases ? (layer.biases[j] || 0) : 0;
+                for (let k = 0; k < currentActivations.length; k++) {
+                    sum += (layer.weights[j][k] || 0) * currentActivations[k];
+                }
+                // Sigmoid activation
+                newActivations.push(1 / (1 + Math.exp(-sum)));
+            }
+            currentActivations = newActivations;
+            
+            // Store activations for hidden layers (skip output layer which is last)
+            if (i < json.layers.length - 1) {
+                this.lastHiddenActivations[i - 1] = newActivations;
+            }
+        }
+    }
+
     update(track: Track) {
         if (this.isDead) return;
 
@@ -97,6 +129,9 @@ export class Boid {
         this.lastInputs = normalizedInputs;
         const output = this.network.run(normalizedInputs) as number[];
         this.lastOutputs = output;
+        
+        // Calculate hidden layer activations for visualization
+        this.calculateHiddenActivations(normalizedInputs);
 
         // Outputs from sigmoid are 0 to 1
         const throttle = output[0];                     // 0 to 1
