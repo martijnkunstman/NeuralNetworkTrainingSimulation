@@ -10,6 +10,7 @@ import { createChartPanel, updateChartPanel, recordChartData } from './panels/Ch
 import { createConfigPanel, updateConfigPanel } from './panels/ConfigPanel';
 import { createSaveLoadPanel } from './panels/SaveLoadPanel';
 import { createDebugPanel, updateDebugPanel } from './panels/DebugPanel';
+import { createTrackPanel, updateTrackPanel } from './panels/TrackPanel';
 
 // Reference to PanelManager so reset can reach it
 let panelManager: PanelManager;
@@ -83,7 +84,7 @@ function followLeader() {
 
 /** Reset all panel positions to defaults (clears localStorage). */
 function resetPanelLayout() {
-  ['brain', 'minimap', 'chart', 'config', 'saveload', 'debug'].forEach(id => {
+  ['brain', 'minimap', 'chart', 'config', 'saveload', 'debug', 'track'].forEach(id => {
     localStorage.removeItem(`panel_state_${id}`);
   });
   location.reload();
@@ -101,6 +102,7 @@ function init() {
   });
 
   fitCameraToViewport();
+  simState.fitCamera = fitCameraToViewport;
 
   // Build simulation objects
   const track = new Track(FIXED_SIZE, FIXED_SIZE);
@@ -120,6 +122,7 @@ function init() {
     createConfigPanel(),
     createSaveLoadPanel(),
     createDebugPanel(),
+    createTrackPanel(),
   ];
 
   panels.forEach(p => {
@@ -148,8 +151,40 @@ function init() {
     }
   });
 
-  // Prevent context menu on canvas (right-click no longer pans but still suppress)
+  // Prevent context menu on canvas
   simCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ── Track editor mouse handling ──────────────────────────────────────────
+  const HIT_RADIUS = 18; // world-space pixels
+
+  simCanvas.addEventListener('mousedown', (e) => {
+    if (!simState.isEditingTrack || !simState.track) return;
+    const rect = simCanvas.getBoundingClientRect();
+    const { tx, ty, scale } = simState.camera;
+    const wx = (e.clientX - rect.left - tx) / scale;
+    const wy = (e.clientY - rect.top  - ty) / scale;
+    const cps = simState.track.controlPoints;
+    for (let i = 0; i < cps.length; i++) {
+      const dx = cps[i].x - wx;
+      const dy = cps[i].y - wy;
+      if (Math.sqrt(dx * dx + dy * dy) < HIT_RADIUS) {
+        simState.trackDragIndex = i;
+        break;
+      }
+    }
+  });
+
+  simCanvas.addEventListener('mousemove', (e) => {
+    if (!simState.isEditingTrack || simState.trackDragIndex === -1 || !simState.track) return;
+    const rect = simCanvas.getBoundingClientRect();
+    const { tx, ty, scale } = simState.camera;
+    simState.track.controlPoints[simState.trackDragIndex].x = (e.clientX - rect.left - tx) / scale;
+    simState.track.controlPoints[simState.trackDragIndex].y = (e.clientY - rect.top  - ty) / scale;
+    simState.track.regenerateFromControlPoints();
+  });
+
+  simCanvas.addEventListener('mouseup', () => { simState.trackDragIndex = -1; });
+  simCanvas.addEventListener('mouseleave', () => { simState.trackDragIndex = -1; });
 
   // ── Start loop ──────────────────────────────────────────────────────────
   requestAnimationFrame(loop);
@@ -197,9 +232,15 @@ function draw() {
 
   track.draw(ctx);
 
-  const best = ga.getBestActiveBoid();
-  for (const boid of ga.boids) {
-    boid.draw(ctx, boid === best);
+  if (!simState.isEditingTrack) {
+    const best = ga.getBestActiveBoid();
+    for (const boid of ga.boids) {
+      boid.draw(ctx, boid === best);
+    }
+  }
+
+  if (simState.isEditingTrack) {
+    track.drawEditOverlay(ctx, simState.trackDragIndex);
   }
 
   resetCameraTransform(ctx);
@@ -223,7 +264,9 @@ function trackFps(now: number) {
 function loop(now: number) {
   trackFps(now);
 
-  if (simState.isPaused) {
+  if (simState.isEditingTrack) {
+    draw();
+  } else if (simState.isPaused) {
     draw();
   } else if (simState.isFastTraining) {
     for (let i = 0; i < 20; i++) update();
@@ -255,6 +298,7 @@ function loop(now: number) {
   updateMinimapPanel();
   updateChartPanel();
   updateConfigPanel();
+  updateTrackPanel();
   updateDebugPanel();
 
   requestAnimationFrame(loop);

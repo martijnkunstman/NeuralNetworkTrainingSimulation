@@ -154,7 +154,7 @@ function wireSlider(
     });
 }
 
-function resetBoidsForNewTrack() {
+export function resetBoidsForNewTrack() {
     const { ga, track } = simState;
     if (!ga || !track) return;
     for (const boid of ga.boids) {

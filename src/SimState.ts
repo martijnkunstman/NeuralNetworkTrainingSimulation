@@ -18,6 +18,8 @@ export interface SimState {
     populationSize: number;
     isFastTraining: boolean;
     isPaused: boolean;
+    isEditingTrack: boolean;
+    trackDragIndex: number;
     autoRandomizeTrack: boolean;
     randomizeInterval: number;
     fitnessHistory: number[];
@@ -26,6 +28,7 @@ export interface SimState {
     fps: number;
     frameCount: number;
     lastFpsTime: number;
+    fitCamera: (() => void) | null;
 }
 
 export const simState: SimState = {
@@ -36,6 +39,8 @@ export const simState: SimState = {
     populationSize: 50,
     isFastTraining: false,
     isPaused: false,
+    isEditingTrack: false,
+    trackDragIndex: -1,
     autoRandomizeTrack: false,
     randomizeInterval: 10,
     fitnessHistory: [],
@@ -44,4 +49,5 @@ export const simState: SimState = {
     fps: 0,
     frameCount: 0,
     lastFpsTime: performance.now(),
+    fitCamera: null,
 };

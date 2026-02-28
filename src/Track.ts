@@ -23,9 +23,19 @@ export class Track {
     startAngle: number = 0;
     seed: number = 0; // Current seed (0 = no randomization)
 
-    // New properties for spline-based track
+    // Spline-based track data
     centerLine: Vector[] = [];
-    trackWidth: number = 120; // Wider track
+    controlPoints: Vector[] = []; // raw control points — editable
+
+    // Tuneable generation parameters
+    trackWidth: number = 120;
+    numControlPoints: number = 14;
+    segmentsPerCurve: number = 15;
+    radiusVariance: number = 0.35;  // 0 = near-circular, 0.8 = very diverse
+    cornerTightness: number = 0.20; // maps to maxAngleVariation
+
+    // Last known-good control points — used to revert editor drags that cause intersections
+    private lastValidControlPoints: Vector[] = [];
 
     // Fixed canvas size for consistent track generation
     static readonly FIXED_SIZE = 1200;
@@ -43,39 +53,36 @@ export class Track {
     private generateControlPoints(w: number, h: number, random: () => number): Vector[] {
         const cx = w / 2;
         const cy = h / 2;
-        
-        // Configuration - gentler curves to prevent wall intersections
-        const numControlPoints = 14;
+
+        const n = this.numControlPoints;
         const baseRadius = Math.min(w, h) * 0.35;
-        const minRadius = baseRadius * 0.75;  // Higher minimum for gentler curves
-        const maxRadius = baseRadius * 1.0;   // Lower maximum for gentler curves
-        const maxAngleVariation = 0.08; // Very small for minimal S-curves
-        
+        const minRadius = baseRadius * Math.max(0.1, 1 - this.radiusVariance);
+        const maxRadius = baseRadius * (1 + this.radiusVariance * 0.5);
+        const maxAngleVariation = this.cornerTightness;
+
         const controlPoints: Vector[] = [];
-        
-        for (let i = 0; i < numControlPoints; i++) {
-            // Base angle evenly distributed
-            const baseAngle = (i / numControlPoints) * Math.PI * 2;
-            
-            // Add random angle variation for curves
-            // Very few points have direction changes (S-curves)
+
+        for (let i = 0; i < n; i++) {
+            const baseAngle = (i / n) * Math.PI * 2;
+
+            // Angle variation — probability scales with cornerTightness
             let angleOffset = 0;
-            if (random() > 0.92) { // Only ~8% of points have direction change
+            if (random() > (1 - this.cornerTightness * 1.5)) {
                 const direction = random() > 0.5 ? 1 : -1;
-                angleOffset = direction * random() * maxAngleVariation * (Math.PI * 2 / numControlPoints);
+                angleOffset = direction * random() * maxAngleVariation * (Math.PI * 2 / n);
             }
             const angle = baseAngle + angleOffset;
-            
-            // Random radius variation within safe bounds
+
             const radiusRange = maxRadius - minRadius;
             const radius = minRadius + random() * radiusRange;
-            
-            const x = cx + radius * Math.cos(angle);
-            const y = cy + radius * Math.sin(angle);
-            
-            controlPoints.push(new Vector(x, y));
+
+            controlPoints.push(new Vector(
+                cx + radius * Math.cos(angle),
+                cy + radius * Math.sin(angle),
+            ));
         }
-        
+
+        this.controlPoints = controlPoints;
         return controlPoints;
     }
 
@@ -386,41 +393,57 @@ export class Track {
 
         // Try to generate a valid track (no self-intersections or wall intersections)
         let attempts = 0;
-        const maxAttempts = 20;
-        
+        const maxAttempts = 50;
+        let validFound = false;
+
         while (attempts < maxAttempts) {
             // Generate control points
             const controlPoints = this.generateControlPoints(w, h, random || (() => Math.random()));
-            
+
             // Generate smooth center line through control points
-            const segmentsPerCurve = 15; // Higher = smoother track
-            this.centerLine = this.catmullRomSpline(controlPoints, segmentsPerCurve);
-            
+            this.centerLine = this.catmullRomSpline(controlPoints, this.segmentsPerCurve);
+
             // Check for center line self-intersection
             if (this.hasSelfIntersection()) {
                 attempts++;
-                if (attempts < maxAttempts) {
-                    this.seed = seed + attempts * 1000;
-                }
+                if (attempts < maxAttempts) this.seed = seed + attempts * 1000;
                 continue;
             }
-            
+
             // Generate walls from center line
             this.generateWallsFromCenterLine();
-            
+
             // Check for wall intersections
             if (this.hasWallIntersection()) {
                 attempts++;
-                if (attempts < maxAttempts) {
-                    this.seed = seed + attempts * 1000;
-                }
+                if (attempts < maxAttempts) this.seed = seed + attempts * 1000;
                 continue;
             }
-            
-            // Valid track found
+
+            // Valid track found — store as the editor's rollback baseline
+            this.lastValidControlPoints = this.controlPoints.map(p => new Vector(p.x, p.y));
+            validFound = true;
             break;
         }
-        
+
+        // Fallback: if all attempts failed, force a simple low-variance oval
+        if (!validFound) {
+            const savedVariance   = this.radiusVariance;
+            const savedTightness  = this.cornerTightness;
+            const savedN          = this.numControlPoints;
+            this.radiusVariance   = 0.05;
+            this.cornerTightness  = 0.05;
+            this.numControlPoints = 10;
+            this.generateControlPoints(w, h, seededRandom(42));
+            this.centerLine = this.catmullRomSpline(this.controlPoints, this.segmentsPerCurve);
+            this.generateWallsFromCenterLine();
+            this.lastValidControlPoints = this.controlPoints.map(p => new Vector(p.x, p.y));
+            // Restore user settings (they remain in effect for next generation attempt)
+            this.radiusVariance   = savedVariance;
+            this.cornerTightness  = savedTightness;
+            this.numControlPoints = savedN;
+        }
+
         // Find suitable start point
         this.findStartPoint();
     }
@@ -463,5 +486,85 @@ export class Track {
             ctx.lineTo(this.checkpoints[0][1].x, this.checkpoints[0][1].y);
             ctx.stroke();
         }
+    }
+
+    /**
+     * Rebuild walls and checkpoints from the current controlPoints array.
+     * Used by the track editor when control points are dragged.
+     * Returns true if the result is intersection-free; false if it reverted
+     * to the last valid state (the dragged point snaps back).
+     */
+    regenerateFromControlPoints(): boolean {
+        if (this.controlPoints.length < 3) return false;
+
+        // Deep-copy current positions as a rollback snapshot
+        const backup = this.controlPoints.map(p => new Vector(p.x, p.y));
+
+        this.centerLine = this.catmullRomSpline(this.controlPoints, this.segmentsPerCurve);
+        this.generateWallsFromCenterLine();
+
+        if (this.hasSelfIntersection() || this.hasWallIntersection()) {
+            // Revert control points and rebuild from the last known-good state
+            if (this.lastValidControlPoints.length > 0) {
+                this.controlPoints = this.lastValidControlPoints.map(p => new Vector(p.x, p.y));
+                this.centerLine = this.catmullRomSpline(this.controlPoints, this.segmentsPerCurve);
+                this.generateWallsFromCenterLine();
+            }
+            this.findStartPoint();
+            return false;
+        }
+
+        // Accept this configuration
+        this.lastValidControlPoints = backup;
+        this.findStartPoint();
+        return true;
+    }
+
+    /**
+     * Draw draggable control point handles for the track editor.
+     * Called from main.ts draw() when isEditingTrack is true.
+     */
+    drawEditOverlay(ctx: CanvasRenderingContext2D, dragIndex: number) {
+        // Dim overlay
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(0, 0, Track.FIXED_SIZE, Track.FIXED_SIZE);
+
+        // Dashed lines connecting control points
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        for (let i = 0; i < this.controlPoints.length; i++) {
+            const cp = this.controlPoints[i];
+            i === 0 ? ctx.moveTo(cp.x, cp.y) : ctx.lineTo(cp.x, cp.y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Control point handles
+        ctx.font = 'bold 10px Inter,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < this.controlPoints.length; i++) {
+            const cp = this.controlPoints[i];
+            const active = i === dragIndex;
+            ctx.beginPath();
+            ctx.arc(cp.x, cp.y, active ? 14 : 10, 0, Math.PI * 2);
+            ctx.fillStyle = active ? '#f59e0b' : '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#000';
+            ctx.fillText(String(i), cp.x, cp.y);
+        }
+
+        // "EDIT MODE" banner
+        ctx.fillStyle = 'rgba(245,158,11,0.9)';
+        ctx.font = 'bold 18px Inter,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('✏️ TRACK EDIT MODE — drag the numbered dots', Track.FIXED_SIZE / 2, 18);
     }
 }
