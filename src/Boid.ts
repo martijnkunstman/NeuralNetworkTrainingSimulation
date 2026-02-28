@@ -16,8 +16,9 @@ export class Boid {
 
     isDead: boolean = false;
     fitness: number = 0;
-    distanceTraveled: number = 0;
+    distanceTraveled: number = 0; // kept for debug display only, not used in fitness
     checkpointCount: number = 0;
+    frameAge: number = 0; // total frames alive, used for speed bonus
     life: number = 500; // frames to live before dying
 
     // Sensors config
@@ -161,10 +162,16 @@ export class Boid {
         }
 
         this.checkCheckpoints(track, prevPos);
+        this.frameAge++;
+        this.distanceTraveled += this.vel.mag(); // tracked for debug only
 
-        // Fitness calculation: heavily weighted towards checkpoints to encourage track progress
-        this.distanceTraveled += this.vel.mag();
-        this.fitness = (this.checkpointCount * 1000) + this.distanceTraveled;
+        // Fitness: checkpoints are the primary driver (ordered — can't game by going backwards).
+        // Speed bonus rewards reaching checkpoints quickly; no raw distance so spinning in place
+        // or circling earns nothing.
+        const speedBonus = this.checkpointCount > 0
+            ? (this.checkpointCount / this.frameAge) * 10000
+            : 0;
+        this.fitness = (this.checkpointCount * 1000) + speedBonus;
     }
 
     checkCheckpoints(track: Track, prevPos: Vector) {

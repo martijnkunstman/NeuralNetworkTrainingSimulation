@@ -5,7 +5,7 @@ import { simState } from '../SimState';
 import { GeneticAlgorithm } from '../AI';
 import type { NeuralNetworkJSON } from '../brain-js';
 import { buildPanel } from './BrainPanel';
-import { resetChartData } from './ChartPanel';
+import { resetChartData, finalizeRun, setCurrentRunStartGen, clearRunHistory } from './ChartPanel';
 
 export function createSaveLoadPanel(): HTMLElement {
     const panel = buildPanel('saveload', '💾 Save / Load', 280, 310, window.innerWidth - 305, window.innerHeight - 330);
@@ -42,27 +42,32 @@ export function createSaveLoadPanel(): HTMLElement {
     body.querySelector('#sl-btn-restart')?.addEventListener('click', () => {
         const { ga, track } = simState;
         if (!ga || !track) return;
+        finalizeRun(ga);
+        resetChartData();
         simState.ga = new GeneticAlgorithm(
             simState.populationSize,
             track.startPoint.x, track.startPoint.y, track.startAngle,
         );
         simState.ga.generation = 1;
-        resetChartData();
+        setCurrentRunStartGen(1);
         setStatus('Generation restarted.');
     });
 
     body.querySelector('#sl-btn-clear')?.addEventListener('click', () => {
         if (!confirm('Clear all training history? This will reset the brain.')) return;
+        const { ga, track } = simState;
+        if (ga) finalizeRun(ga);
+        clearRunHistory();
+        resetChartData();
         localStorage.removeItem('best_boid_brain');
         localStorage.removeItem('current_generation');
-        const { track } = simState;
         if (!track) return;
         simState.ga = new GeneticAlgorithm(
             simState.populationSize,
             track.startPoint.x, track.startPoint.y, track.startAngle,
         );
         simState.ga.generation = 1;
-        resetChartData();
+        setCurrentRunStartGen(1);
         setStatus('History cleared.');
     });
 

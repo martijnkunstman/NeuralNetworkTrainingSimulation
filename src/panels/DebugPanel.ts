@@ -26,6 +26,7 @@ export function createDebugPanel(): HTMLElement {
     <div class="dbg-stats">
       <div class="dbg-row"><span>FPS</span><span id="dbg-fps">—</span></div>
       <div class="dbg-row"><span>Generation</span><span id="dbg-gen">—</span></div>
+      <div class="dbg-row"><span>Frames Left</span><span id="dbg-frames">—</span></div>
       <div class="dbg-row"><span>Alive</span><span id="dbg-alive">—</span></div>
       <div class="dbg-row"><span>Best Fitness</span><span id="dbg-fitness">—</span></div>
       <div class="dbg-row"><span>Diversity</span><span id="dbg-diversity">—</span></div>
@@ -55,6 +56,7 @@ export function updateDebugPanel() {
 
     setText('dbg-fps', fps.toFixed(1));
     setText('dbg-gen', String(ga.generation));
+    setText('dbg-frames', String(Math.max(0, ga.maxLifespan - ga.timer)));
 
     const alive = ga.boids.filter(b => !b.isDead).length;
     setText('dbg-alive', `${alive} / ${simState.populationSize}`);

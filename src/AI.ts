@@ -13,6 +13,9 @@ export class GeneticAlgorithm {
     eliteCount: number = 1;      // Number of top performers preserved unchanged
     tournamentSize: number = 3;  // Tournament selection size
     topParentsCount: number = 5; // Number of top boids eligible for crossover
+    lastGenEndStats: { generation: number; survivorCount: number; bestFitness: number; diversity: number } | null = null;
+    bestFitnessThisGen: number = 0;
+    lastImprovementTimer: number = 0;
 
     constructor(size: number, startX: number, startY: number, startAngle: number) {
         this.populationSize = size;
@@ -39,12 +42,22 @@ export class GeneticAlgorithm {
     update(track: Track) {
         this.timer++;
         let allDead = true;
+        let currentBestFitness = 0;
         for (const boid of this.boids) {
             boid.update(track);
             if (!boid.isDead) allDead = false;
+            if (boid.fitness > currentBestFitness) currentBestFitness = boid.fitness;
         }
 
-        if (allDead || this.timer > this.maxLifespan) {
+        if (currentBestFitness > this.bestFitnessThisGen) {
+            this.bestFitnessThisGen = currentBestFitness;
+            this.lastImprovementTimer = this.timer;
+        }
+
+        const noEliteFor500 = (this.maxLifespan - this.timer) <= 500
+            && (this.timer - this.lastImprovementTimer) >= 500;
+
+        if (allDead || this.timer > this.maxLifespan || noEliteFor500) {
             this.nextGeneration(track.startPoint.x, track.startPoint.y, track.startAngle);
             this.timer = 0;
         }
@@ -105,6 +118,18 @@ export class GeneticAlgorithm {
     }
 
     nextGeneration(x: number, y: number, angle: number) {
+        // Reset per-generation improvement tracking
+        this.bestFitnessThisGen = 0;
+        this.lastImprovementTimer = 0;
+
+        // Snapshot end-of-generation stats before any replacement
+        this.lastGenEndStats = {
+            generation: this.generation,
+            survivorCount: this.boids.filter(b => !b.isDead).length,
+            bestFitness: Math.max(...this.boids.map(b => b.fitness)),
+            diversity: this.calculateDiversity(),
+        };
+
         // Sort by fitness (descending)
         this.boids.sort((a, b) => b.fitness - a.fitness);
 
