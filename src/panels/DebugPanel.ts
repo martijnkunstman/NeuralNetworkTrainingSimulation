@@ -28,6 +28,7 @@ export function createDebugPanel(): HTMLElement {
       <div class="dbg-row"><span>Generation</span><span id="dbg-gen">—</span></div>
       <div class="dbg-row"><span>Frames Left</span><span id="dbg-frames">—</span></div>
       <div class="dbg-row"><span>Alive</span><span id="dbg-alive">—</span></div>
+      <div class="dbg-row"><span>Best Boid TTL</span><span id="dbg-best-ttl">—</span></div>
       <div class="dbg-row"><span>Best Fitness</span><span id="dbg-fitness">—</span></div>
       <div class="dbg-row"><span>Diversity</span><span id="dbg-diversity">—</span></div>
     </div>
@@ -63,6 +64,18 @@ export function updateDebugPanel() {
 
     const best = ga.getBestActiveBoid();
     setText('dbg-fitness', best ? Math.floor(best.fitness).toString() : '—');
+
+    const ttlEl = document.getElementById('dbg-best-ttl');
+    if (ttlEl) {
+        if (ga.bestBoidDiedAt === -1) {
+            ttlEl.textContent = '500';
+            ttlEl.style.color = '#4ade80';
+        } else {
+            const remaining = Math.max(0, 500 - (ga.timer - ga.bestBoidDiedAt));
+            ttlEl.textContent = String(remaining);
+            ttlEl.style.color = remaining > 250 ? '#fb923c' : '#f87171';
+        }
+    }
 
     if (ga.timer % 15 === 0) {
         const div = ga.calculateDiversity();

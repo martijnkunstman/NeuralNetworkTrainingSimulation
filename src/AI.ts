@@ -16,6 +16,7 @@ export class GeneticAlgorithm {
     lastGenEndStats: { generation: number; survivorCount: number; bestFitness: number; diversity: number } | null = null;
     bestFitnessThisGen: number = 0;
     lastImprovementTimer: number = 0;
+    bestBoidDiedAt: number = -1; // timer frame when all-time-best boid died; -1 = still alive
 
     constructor(size: number, startX: number, startY: number, startAngle: number) {
         this.populationSize = size;
@@ -43,9 +44,13 @@ export class GeneticAlgorithm {
         this.timer++;
         let allDead = true;
         let currentBestFitness = 0;
+        let bestAliveFitness = 0;
         for (const boid of this.boids) {
             boid.update(track);
-            if (!boid.isDead) allDead = false;
+            if (!boid.isDead) {
+                allDead = false;
+                if (boid.fitness > bestAliveFitness) bestAliveFitness = boid.fitness;
+            }
             if (boid.fitness > currentBestFitness) currentBestFitness = boid.fitness;
         }
 
@@ -54,10 +59,22 @@ export class GeneticAlgorithm {
             this.lastImprovementTimer = this.timer;
         }
 
+        // Detect when the all-time-best boid has died with no alive boid matching it.
+        // Reset the clock if an alive boid catches up (new best emerged).
+        if (this.bestFitnessThisGen > 0) {
+            if (bestAliveFitness >= this.bestFitnessThisGen) {
+                this.bestBoidDiedAt = -1; // a live boid is leading — no countdown
+            } else if (this.bestBoidDiedAt === -1) {
+                this.bestBoidDiedAt = this.timer; // best just died, start countdown
+            }
+        }
+
         const noEliteFor500 = (this.maxLifespan - this.timer) <= 500
             && (this.timer - this.lastImprovementTimer) >= 500;
+        const bestDeadFor500 = this.bestBoidDiedAt !== -1
+            && (this.timer - this.bestBoidDiedAt) >= 500;
 
-        if (allDead || this.timer > this.maxLifespan || noEliteFor500) {
+        if (allDead || this.timer > this.maxLifespan || noEliteFor500 || bestDeadFor500) {
             this.nextGeneration(track.startPoint.x, track.startPoint.y, track.startAngle);
             this.timer = 0;
         }
@@ -121,6 +138,7 @@ export class GeneticAlgorithm {
         // Reset per-generation improvement tracking
         this.bestFitnessThisGen = 0;
         this.lastImprovementTimer = 0;
+        this.bestBoidDiedAt = -1;
 
         // Snapshot end-of-generation stats before any replacement
         this.lastGenEndStats = {
