@@ -6,49 +6,36 @@
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Neural Network Training Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 
 <body>
-  <div id="app">
-    <div id="simulation-container">
-      <canvas id="simulation-canvas"></canvas>
-    </div>
-    <div id="side-panel">
-      <div id="network-container">
-        <canvas id="network-canvas"></canvas>
-      </div>
-      <div id="controls">
-        <button id="btn-toggle-fast">Toggle Fast Training (No Render)</button>
-        <button id="btn-restart">Restart Generation</button>
-        <button id="btn-clear-history" style="background-color: #442222; color: white; margin-top: 5px;">Clear
-          History</button>
-        
-        <div class="control-section">
-          <h4>Track Options</h4>
-          <button id="btn-randomize-track">Randomize Track</button>
-          <div class="checkbox-row">
-            <input type="checkbox" id="auto-randomize">
-            <label for="auto-randomize">Auto-randomize every 10 gen</label>
-          </div>
-          <div class="stat-row">Seed: <span id="track-seed">Default</span></div>
-        </div>
+  <!-- Full-screen simulation background -->
+  <canvas id="simulation-canvas"></canvas>
 
-        <div class="control-section">
-          <h4>Brain I/O</h4>
-          <button id="btn-export-brain">Export Brain</button>
-          <button id="btn-import-brain">Import Brain</button>
-        </div>
+  <!-- Floating panel overlay -->
+  <div id="panel-layer"></div>
 
-        <div class="control-section">
-          <h4>Statistics</h4>
-          <div class="stat-row">Generation: <span id="generation-count">1</span></div>
-          <div class="stat-row">Alive: <span id="alive-count">0</span></div>
-          <div class="stat-row">Best Fitness: <span id="best-fitness">0</span></div>
-          <div class="stat-row">Diversity: <span id="diversity-score">0.00</span></div>
-        </div>
-      </div>
-    </div>
+  <!-- Fixed toolbar -->
+  <div id="toolbar">
+    <span class="toolbar-brand">🧬 NN Sim</span>
+    <button class="toolbar-btn toolbar-btn--active" data-toggle-panel="brain" title="Brain Visualisation">🧠
+      Brain</button>
+    <button class="toolbar-btn toolbar-btn--active" data-toggle-panel="minimap" title="Minimap">🗺 Map</button>
+    <button class="toolbar-btn toolbar-btn--active" data-toggle-panel="chart" title="Chart">📈 Chart</button>
+    <button class="toolbar-btn toolbar-btn--active" data-toggle-panel="config" title="Config">⚙️ Config</button>
+    <button class="toolbar-btn toolbar-btn--active" data-toggle-panel="saveload" title="Save/Load">💾 Save</button>
+    <button class="toolbar-btn toolbar-btn--active" data-toggle-panel="debug" title="Debug">🐛 Debug</button>
+    <div class="toolbar-spacer"></div>
+    <span id="toolbar-zoom" class="toolbar-info">100%</span>
+    <button class="toolbar-btn" id="btn-zoom-reset" title="Reset zoom &amp; pan (scroll=zoom, middle-drag=pan)">⊞ Reset
+      View</button>
+    <button class="toolbar-btn" id="btn-reset-panels" title="Reset all panel positions to defaults">⟳ Reset
+      Panels</button>
   </div>
+
   <script src="/brain-browser.min.js"></script>
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -1,290 +1,279 @@
 // src/main.ts
 import '../style.css';
 import { Track } from './Track';
-import { GeneticAlgorithm, drawNetwork } from './AI';
-import { Vector } from './Vector';
-import type { NeuralNetworkJSON } from './brain-js';
+import { GeneticAlgorithm } from './AI';
+import { simState } from './SimState';
+import { PanelManager } from './PanelManager';
+import { createBrainPanel, updateBrainPanel } from './panels/BrainPanel';
+import { createMinimapPanel, updateMinimapPanel } from './panels/MinimapPanel';
+import { createChartPanel, updateChartPanel, recordChartData } from './panels/ChartPanel';
+import { createConfigPanel, updateConfigPanel } from './panels/ConfigPanel';
+import { createSaveLoadPanel } from './panels/SaveLoadPanel';
+import { createDebugPanel, updateDebugPanel } from './panels/DebugPanel';
 
-// Type definitions and initial variables
-let simulationCanvas: HTMLCanvasElement;
-let simulationCtx: CanvasRenderingContext2D;
-let networkCanvas: HTMLCanvasElement;
-let networkCtx: CanvasRenderingContext2D;
+// Reference to PanelManager so reset can reach it
+let panelManager: PanelManager;
 
-let isFastTraining = false;
-let autoRandomizeTrack = false;
-let randomizeInterval = 10; // generations between track randomization
-
-let track: Track;
-let ga: GeneticAlgorithm;
-
+// ── Constants ────────────────────────────────────────────────────────────────
 const POPULATION_SIZE = 50;
+const FIXED_SIZE = Track.FIXED_SIZE; // 1200
+const TOOLBAR_H = 46;
 
+// ── Canvas resize ────────────────────────────────────────────────────────────
+/**
+ * Keep the canvas internal resolution equal to the visible viewport so that
+ * clientX/clientY mouse coordinates map directly to canvas coordinates.
+ * (Previously the canvas was 1200×1200 internally but CSS-stretched, which
+ * broke all zoom/pan coordinate math.)
+ */
+function resizeCanvas() {
+  const c = simState.simulationCanvas;
+  if (!c) return;
+  c.width = window.innerWidth;
+  c.height = window.innerHeight - TOOLBAR_H;
+}
+
+// ── Camera helpers ───────────────────────────────────────────────────────────
+function applyCamera(ctx: CanvasRenderingContext2D) {
+  const { tx, ty, scale } = simState.camera;
+  ctx.setTransform(scale, 0, 0, scale, tx, ty);
+}
+
+function resetCameraTransform(ctx: CanvasRenderingContext2D) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/** Fit the 1200×1200 world into the current viewport (90% fill, centred). */
+function fitCameraToViewport() {
+  const c = simState.simulationCanvas;
+  if (!c) return;
+  const vw = c.width;
+  const vh = c.height;
+  const fitScale = Math.min(vw, vh) / FIXED_SIZE * 0.90;
+  simState.camera.scale = fitScale;
+  simState.camera.tx = (vw - FIXED_SIZE * fitScale) / 2;
+  simState.camera.ty = (vh - FIXED_SIZE * fitScale) / 2;
+  updateZoomLabel();
+}
+
+/** Reset all panel positions to defaults (clears localStorage). */
+function resetPanelLayout() {
+  ['brain', 'minimap', 'chart', 'config', 'saveload', 'debug'].forEach(id => {
+    localStorage.removeItem(`panel_state_${id}`);
+  });
+  // Re-show all panels with default positions by reloading
+  location.reload();
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
 function init() {
-  simulationCanvas = document.getElementById('simulation-canvas') as HTMLCanvasElement;
-  networkCanvas = document.getElementById('network-canvas') as HTMLCanvasElement;
+  // Set up full-screen simulation canvas (viewport-sized so coords match)
+  const simCanvas = document.getElementById('simulation-canvas') as HTMLCanvasElement;
+  simState.simulationCanvas = simCanvas;
+  resizeCanvas();  // canvas.width = viewport width, height = viewport height - toolbar
 
-  // Set fixed square canvas size for consistent track generation
-  const fixedSize = Track.FIXED_SIZE;
-  simulationCanvas.width = fixedSize;
-  simulationCanvas.height = fixedSize;
-
-  const netContainer = document.getElementById('network-container');
-  if (netContainer) {
-    networkCanvas.width = netContainer.clientWidth - 20;
-    networkCanvas.height = netContainer.clientHeight - 20;
-  }
-
-  simulationCtx = simulationCanvas.getContext('2d')!;
-  networkCtx = networkCanvas.getContext('2d')!;
-
-  // Setup logic objects
-  track = new Track(simulationCanvas.width, simulationCanvas.height);
-  ga = new GeneticAlgorithm(POPULATION_SIZE, track.startPoint.x, track.startPoint.y, track.startAngle);
-
-  // Setup event listeners
-  const fastBtn = document.getElementById('btn-toggle-fast');
-  fastBtn?.addEventListener('click', () => {
-    isFastTraining = !isFastTraining;
-    if (fastBtn) {
-      fastBtn.innerText = isFastTraining ? "Toggle Normal Viz" : "Toggle Fast Training (No Render)";
-    }
+  // Keep canvas sized to viewport on browser resize
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    fitCameraToViewport();
   });
 
-  document.getElementById('btn-restart')?.addEventListener('click', () => {
-    ga = new GeneticAlgorithm(POPULATION_SIZE, track.startPoint.x, track.startPoint.y, track.startAngle);
-    ga.generation = 1;
+  // Fit camera to show full 1200×1200 world on startup
+  fitCameraToViewport();
+
+  // Build simulation objects
+  const track = new Track(FIXED_SIZE, FIXED_SIZE);
+  const ga = new GeneticAlgorithm(POPULATION_SIZE, track.startPoint.x, track.startPoint.y, track.startAngle);
+  simState.track = track;
+  simState.ga = ga;
+  simState.populationSize = POPULATION_SIZE;
+
+  // ── Panel system ────────────────────────────────────────────────────────
+  panelManager = new PanelManager();
+  const panelLayer = document.getElementById('panel-layer')!;
+
+  const panels = [
+    createBrainPanel(),
+    createMinimapPanel(),
+    createChartPanel(),
+    createConfigPanel(),
+    createSaveLoadPanel(),
+    createDebugPanel(),
+  ];
+
+  panels.forEach(p => {
+    panelLayer.appendChild(p);
+    panelManager.register(p);
   });
 
-  document.getElementById('btn-clear-history')?.addEventListener('click', () => {
-    if (confirm("Clear all training history? This will reset the brain.")) {
-      localStorage.removeItem('best_boid_brain');
-      localStorage.removeItem('current_generation');
-      ga = new GeneticAlgorithm(POPULATION_SIZE, track.startPoint.x, track.startPoint.y, track.startAngle);
-      ga.generation = 1;
-    }
+  // ── Toolbar buttons ─────────────────────────────────────────────────────
+  document.querySelectorAll<HTMLButtonElement>('[data-toggle-panel]').forEach(btn => {
+    const id = btn.dataset.togglePanel!;
+    btn.addEventListener('click', () => panelManager.toggleVisible(id));
   });
 
-  // Track randomization button
-  document.getElementById('btn-randomize-track')?.addEventListener('click', () => {
-    const newSeed = track.randomize(Track.FIXED_SIZE, Track.FIXED_SIZE);
-    updateTrackSeedDisplay(newSeed);
-    // Reset boids to new start position
-    resetBoidsForNewTrack();
+  document.getElementById('btn-zoom-reset')?.addEventListener('click', fitCameraToViewport);
+  document.getElementById('btn-reset-panels')?.addEventListener('click', resetPanelLayout);
+
+  // ── Zoom (scroll wheel) ─────────────────────────────────────────────────
+  simCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const cx = e.clientX;
+    const cy = e.clientY;
+    const { tx, ty, scale } = simState.camera;
+    const newScale = Math.min(8, Math.max(0.1, scale * factor));
+    // Zoom toward cursor: keep world point under cursor fixed
+    simState.camera.tx = cx - (cx - tx) * (newScale / scale);
+    simState.camera.ty = cy - (cy - ty) * (newScale / scale);
+    simState.camera.scale = newScale;
+    updateZoomLabel();
+  }, { passive: false });
+
+  // ── Pan (middle-click drag or right-click drag) ─────────────────────────
+  let isPanning = false;
+  let panStartX = 0;
+  let panStartY = 0;
+  let panOriginX = 0;
+  let panOriginY = 0;
+
+  const startPan = (e: MouseEvent) => {
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panOriginX = simState.camera.tx;
+    panOriginY = simState.camera.ty;
+    document.body.style.cursor = 'grabbing';
+  };
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isPanning) return;
+    simState.camera.tx = panOriginX + (e.clientX - panStartX);
+    simState.camera.ty = panOriginY + (e.clientY - panStartY);
   });
 
-  // Auto-randomize toggle
-  const autoRandomizeCheckbox = document.getElementById('auto-randomize') as HTMLInputElement;
-  autoRandomizeCheckbox?.addEventListener('change', (e) => {
-    autoRandomizeTrack = (e.target as HTMLInputElement).checked;
+  document.addEventListener('mouseup', () => {
+    if (!isPanning) return;
+    isPanning = false;
+    document.body.style.cursor = '';
   });
 
-  // Export brain button
-  document.getElementById('btn-export-brain')?.addEventListener('click', () => {
-    exportBrain();
+  simCanvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || e.button === 2) { e.preventDefault(); startPan(e); }
   });
 
-  // Import brain button
-  document.getElementById('btn-import-brain')?.addEventListener('click', () => {
-    importBrain();
-  });
+  simCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
-  // Start the loop
+  // ── Start loop ──────────────────────────────────────────────────────────
   requestAnimationFrame(loop);
 }
 
-/**
- * Reset all boids to the new track start position
- */
-function resetBoidsForNewTrack() {
-  for (const boid of ga.boids) {
-    boid.pos = new Vector(track.startPoint.x, track.startPoint.y);
-    boid.heading = track.startAngle;
-    boid.vel = Vector.fromAngle(track.startAngle, 0.1);
-    boid.acc.mult(0);
-    boid.isDead = false;
-    boid.fitness = 0;
-    boid.distanceTraveled = 0;
-    boid.checkpointCount = 0;
-    boid.life = 500;
-  }
-  ga.timer = 0;
+// ── Zoom label (toolbar) ─────────────────────────────────────────────────────
+function updateZoomLabel() {
+  const pct = Math.round(simState.camera.scale * 100);
+  const zoomEl = document.getElementById('toolbar-zoom');
+  if (zoomEl) zoomEl.textContent = `${pct}%`;
 }
 
-/**
- * Export the best brain to a JSON file
- */
-function exportBrain() {
-  const best = ga.boids.reduce((best, boid) => boid.fitness > best.fitness ? boid : best, ga.boids[0]);
-  if (!best) return;
-
-  const brainJSON = best.network.toJSON() as NeuralNetworkJSON;
-  const data = {
-    generation: ga.generation,
-    fitness: best.fitness,
-    network: brainJSON,
-    exportedAt: new Date().toISOString()
-  };
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `brain-gen${ga.generation}-fitness${Math.floor(best.fitness)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/**
- * Import a brain from a JSON file
- */
-function importBrain() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  
-  input.onchange = async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      
-      // Validate structure
-      if (!data.network || !data.network.layers) {
-        alert('Invalid brain file: missing network structure');
-        return;
-      }
-
-      // Load into first boid and save to localStorage
-      const boid = ga.boids[0];
-      if (boid) {
-        boid.network.fromJSON(data.network as NeuralNetworkJSON);
-        localStorage.setItem('best_boid_brain', JSON.stringify(data.network));
-        
-        if (data.generation) {
-          ga.generation = data.generation;
-          localStorage.setItem('current_generation', data.generation.toString());
-        }
-        
-        alert(`Brain imported successfully! Generation: ${data.generation || 'unknown'}, Fitness: ${Math.floor(data.fitness) || 'unknown'}`);
-      }
-    } catch (err) {
-      alert('Failed to import brain: ' + (err as Error).message);
-    }
-  };
-
-  input.click();
-}
-
-/**
- * Update the track seed display in UI
- */
-function updateTrackSeedDisplay(seed: number) {
-  const seedSpan = document.getElementById('track-seed');
-  if (seedSpan) {
-    seedSpan.innerText = seed === 0 ? 'Default' : seed.toString();
-  }
-}
+// ── Update ────────────────────────────────────────────────────────────────────
+let prevGeneration = 0;
 
 function update() {
-  const prevGeneration = ga.generation;
+  const { ga, track } = simState;
+  if (!ga || !track) return;
+  prevGeneration = ga.generation;
   ga.update(track);
-  
-  // Check if generation changed and auto-randomize is enabled
-  if (autoRandomizeTrack && ga.generation > prevGeneration && ga.generation % randomizeInterval === 0) {
-    const newSeed = track.randomize(simulationCanvas.width, simulationCanvas.height);
-    updateTrackSeedDisplay(newSeed);
-    // Note: We don't reset boids here to test generalization
-    // The evolved brains must adapt to the new track
+
+  // Auto-randomize track
+  if (
+    simState.autoRandomizeTrack &&
+    ga.generation > prevGeneration &&
+    ga.generation % simState.randomizeInterval === 0
+  ) {
+    track.randomize(FIXED_SIZE, FIXED_SIZE);
   }
 }
 
-function updateUI() {
-  const genSpan = document.getElementById('generation-count');
-  const aliveSpan = document.getElementById('alive-count');
-  const fitSpan = document.getElementById('best-fitness');
-  const diversitySpan = document.getElementById('diversity-score');
-
-  if (genSpan) genSpan.innerText = ga.generation.toString();
-
-  const aliveCount = ga.boids.filter(b => !b.isDead).length;
-  if (aliveSpan) aliveSpan.innerText = `${aliveCount} / ${POPULATION_SIZE}`;
-
-  const best = ga.getBestActiveBoid();
-  if (best && fitSpan) {
-    fitSpan.innerText = Math.floor(best.fitness).toString();
-  }
-
-  // Update diversity score (expensive, so only update every 10 frames)
-  if (diversitySpan && ga.timer % 10 === 0) {
-    const diversity = ga.calculateDiversity();
-    diversitySpan.innerText = diversity.toFixed(2);
-    
-    // Warn if diversity is low
-    if (diversity < 1.0) {
-      diversitySpan.style.color = '#ff6666';
-    } else if (diversity < 3.0) {
-      diversitySpan.style.color = '#ffaa66';
-    } else {
-      diversitySpan.style.color = '#66ff66';
-    }
-  }
-}
-
+// ── Draw ──────────────────────────────────────────────────────────────────────
 function draw() {
-  // Clear canvases
-  simulationCtx.clearRect(0, 0, simulationCanvas.width, simulationCanvas.height);
-  networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
+  const simCanvas = simState.simulationCanvas;
+  const { ga, track } = simState;
+  if (!simCanvas || !ga || !track) return;
 
-  // Draw track
-  track.draw(simulationCtx);
+  const ctx = simCanvas.getContext('2d')!;
 
-  // Draw boids
+  // Fill full viewport (canvas.width = window.innerWidth now)
+  resetCameraTransform(ctx);
+  ctx.fillStyle = '#0a0c10';
+  ctx.fillRect(0, 0, simCanvas.width, simCanvas.height);
+
+  // Apply camera transform
+  applyCamera(ctx);
+
+  track.draw(ctx);
+
   const best = ga.getBestActiveBoid();
-
   for (const boid of ga.boids) {
-    // Only draw sensors for the best boid
-    const isBest = (boid === best);
-    boid.draw(simulationCtx, isBest);
+    boid.draw(ctx, boid === best);
   }
 
-  // Draw Neural Network for the best active boid
-  if (best) {
-    // Background for Network
-    networkCtx.fillStyle = '#222';
-    networkCtx.fillRect(0, 0, networkCanvas.width, networkCanvas.height);
-    drawNetwork(networkCtx, best);
-  }
-
-  updateUI();
+  // Reset transform before panel updates
+  resetCameraTransform(ctx);
 }
 
-function loop() {
+// ── FPS tracking ──────────────────────────────────────────────────────────────
+let lastFpsCalc = performance.now();
+let fps60Frames = 0;
 
-  if (isFastTraining) {
-    // Run multiple logic updates per single frame request
-    // to rapidly progress generations
-    for (let i = 0; i < 20; i++) {
-      update();
+function trackFps(now: number) {
+  fps60Frames++;
+  const elapsed = now - lastFpsCalc;
+  if (elapsed >= 500) {
+    simState.fps = (fps60Frames / elapsed) * 1000;
+    fps60Frames = 0;
+    lastFpsCalc = now;
+  }
+}
+
+// ── Main loop ─────────────────────────────────────────────────────────────────
+function loop(now: number) {
+  trackFps(now);
+
+  if (simState.isFastTraining) {
+    for (let i = 0; i < 20; i++) update();
+    // Minimal draw in fast mode
+    const simCanvas = simState.simulationCanvas;
+    const { ga } = simState;
+    if (simCanvas && ga) {
+      const ctx = simCanvas.getContext('2d')!;
+      resetCameraTransform(ctx);
+      ctx.fillStyle = '#0a0c10';
+      ctx.fillRect(0, 0, simCanvas.width, simCanvas.height);
+      ctx.fillStyle = 'rgba(99,102,241,0.8)';
+      ctx.font = 'bold 48px Inter,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`⚡ FAST TRAINING — GEN ${ga.generation}`, simCanvas.width / 2, simCanvas.height / 2);
     }
-    // minimal draw
-    simulationCtx.clearRect(0, 0, simulationCanvas.width, simulationCanvas.height);
-    simulationCtx.fillStyle = 'white';
-    simulationCtx.fillText(`FAST TRAINING: GEN ${ga.generation}`, 20, 30);
-    updateUI();
   } else {
     update();
     draw();
   }
 
+  // Record chart data once per generation
+  recordChartData();
+
+  // Update panels (lightweight — only if visible)
+  updateBrainPanel();
+  updateMinimapPanel();
+  updateChartPanel();
+  updateConfigPanel();
+  updateDebugPanel();
+
   requestAnimationFrame(loop);
 }
 
-// Ensure DOM is loaded before init
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
