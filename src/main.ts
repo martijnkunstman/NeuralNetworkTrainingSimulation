@@ -18,14 +18,10 @@ let panelManager: PanelManager;
 const POPULATION_SIZE = 50;
 const FIXED_SIZE = Track.FIXED_SIZE; // 1200
 const TOOLBAR_H = 46;
+const ZOOM_FACTOR = 1.25;            // Step per zoom button press
+const CAM_LERP = 0.07;               // Smooth-follow speed (0=frozen, 1=instant)
 
 // ── Canvas resize ────────────────────────────────────────────────────────────
-/**
- * Keep the canvas internal resolution equal to the visible viewport so that
- * clientX/clientY mouse coordinates map directly to canvas coordinates.
- * (Previously the canvas was 1200×1200 internally but CSS-stretched, which
- * broke all zoom/pan coordinate math.)
- */
 function resizeCanvas() {
   const c = simState.simulationCanvas;
   if (!c) return;
@@ -56,29 +52,54 @@ function fitCameraToViewport() {
   updateZoomLabel();
 }
 
+/** Adjust zoom centred on the screen midpoint. */
+function adjustZoom(factor: number) {
+  const c = simState.simulationCanvas;
+  if (!c) return;
+  const { tx, ty, scale } = simState.camera;
+  const cx = c.width / 2;
+  const cy = c.height / 2;
+  const newScale = Math.min(8, Math.max(0.1, scale * factor));
+  simState.camera.tx = cx - (cx - tx) * (newScale / scale);
+  simState.camera.ty = cy - (cy - ty) * (newScale / scale);
+  simState.camera.scale = newScale;
+  updateZoomLabel();
+}
+
+/** Smooth-follow the leading boid each frame (lerp tx/ty toward target). */
+function followLeader() {
+  const { ga, simulationCanvas: c, camera } = simState;
+  if (!ga || !c) return;
+  const best = ga.getBestActiveBoid();
+  if (!best) return;
+
+  const { scale } = camera;
+  const targetTx = c.width  / 2 - best.pos.x * scale;
+  const targetTy = c.height / 2 - best.pos.y * scale;
+
+  camera.tx += (targetTx - camera.tx) * CAM_LERP;
+  camera.ty += (targetTy - camera.ty) * CAM_LERP;
+}
+
 /** Reset all panel positions to defaults (clears localStorage). */
 function resetPanelLayout() {
   ['brain', 'minimap', 'chart', 'config', 'saveload', 'debug'].forEach(id => {
     localStorage.removeItem(`panel_state_${id}`);
   });
-  // Re-show all panels with default positions by reloading
   location.reload();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 function init() {
-  // Set up full-screen simulation canvas (viewport-sized so coords match)
   const simCanvas = document.getElementById('simulation-canvas') as HTMLCanvasElement;
   simState.simulationCanvas = simCanvas;
-  resizeCanvas();  // canvas.width = viewport width, height = viewport height - toolbar
+  resizeCanvas();
 
-  // Keep canvas sized to viewport on browser resize
   window.addEventListener('resize', () => {
     resizeCanvas();
     fitCameraToViewport();
   });
 
-  // Fit camera to show full 1200×1200 world on startup
   fitCameraToViewport();
 
   // Build simulation objects
@@ -112,6 +133,8 @@ function init() {
     btn.addEventListener('click', () => panelManager.toggleVisible(id));
   });
 
+  document.getElementById('btn-zoom-in')?.addEventListener('click',  () => adjustZoom(ZOOM_FACTOR));
+  document.getElementById('btn-zoom-out')?.addEventListener('click', () => adjustZoom(1 / ZOOM_FACTOR));
   document.getElementById('btn-zoom-reset')?.addEventListener('click', fitCameraToViewport);
   document.getElementById('btn-reset-panels')?.addEventListener('click', resetPanelLayout);
 
@@ -125,53 +148,7 @@ function init() {
     }
   });
 
-  // ── Zoom (scroll wheel) ─────────────────────────────────────────────────
-  simCanvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-    const cx = e.clientX;
-    const cy = e.clientY;
-    const { tx, ty, scale } = simState.camera;
-    const newScale = Math.min(8, Math.max(0.1, scale * factor));
-    // Zoom toward cursor: keep world point under cursor fixed
-    simState.camera.tx = cx - (cx - tx) * (newScale / scale);
-    simState.camera.ty = cy - (cy - ty) * (newScale / scale);
-    simState.camera.scale = newScale;
-    updateZoomLabel();
-  }, { passive: false });
-
-  // ── Pan (middle-click drag or right-click drag) ─────────────────────────
-  let isPanning = false;
-  let panStartX = 0;
-  let panStartY = 0;
-  let panOriginX = 0;
-  let panOriginY = 0;
-
-  const startPan = (e: MouseEvent) => {
-    isPanning = true;
-    panStartX = e.clientX;
-    panStartY = e.clientY;
-    panOriginX = simState.camera.tx;
-    panOriginY = simState.camera.ty;
-    document.body.style.cursor = 'grabbing';
-  };
-
-  document.addEventListener('mousemove', (e) => {
-    if (!isPanning) return;
-    simState.camera.tx = panOriginX + (e.clientX - panStartX);
-    simState.camera.ty = panOriginY + (e.clientY - panStartY);
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (!isPanning) return;
-    isPanning = false;
-    document.body.style.cursor = '';
-  });
-
-  simCanvas.addEventListener('mousedown', (e) => {
-    if (e.button === 1 || e.button === 2) { e.preventDefault(); startPan(e); }
-  });
-
+  // Prevent context menu on canvas (right-click no longer pans but still suppress)
   simCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
   // ── Start loop ──────────────────────────────────────────────────────────
@@ -212,12 +189,10 @@ function draw() {
 
   const ctx = simCanvas.getContext('2d')!;
 
-  // Fill full viewport (canvas.width = window.innerWidth now)
   resetCameraTransform(ctx);
   ctx.fillStyle = '#0a0c10';
   ctx.fillRect(0, 0, simCanvas.width, simCanvas.height);
 
-  // Apply camera transform
   applyCamera(ctx);
 
   track.draw(ctx);
@@ -227,7 +202,6 @@ function draw() {
     boid.draw(ctx, boid === best);
   }
 
-  // Reset transform before panel updates
   resetCameraTransform(ctx);
 }
 
@@ -250,7 +224,6 @@ function loop(now: number) {
   trackFps(now);
 
   if (simState.isPaused) {
-    // Paused: keep canvas live but skip simulation update
     draw();
   } else if (simState.isFastTraining) {
     for (let i = 0; i < 20; i++) update();
@@ -269,6 +242,7 @@ function loop(now: number) {
       ctx.fillText(`⚡ FAST TRAINING — GEN ${ga.generation}`, simCanvas.width / 2, simCanvas.height / 2);
     }
   } else {
+    followLeader();
     update();
     draw();
   }
@@ -276,7 +250,7 @@ function loop(now: number) {
   // Record chart data once per generation
   recordChartData();
 
-  // Update panels (lightweight — only if visible)
+  // Update panels (only when visible and not minimized)
   updateBrainPanel();
   updateMinimapPanel();
   updateChartPanel();

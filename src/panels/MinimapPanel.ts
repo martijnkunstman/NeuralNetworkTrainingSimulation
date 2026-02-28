@@ -1,14 +1,22 @@
 // src/panels/MinimapPanel.ts
-// Thumbnail of the full simulation canvas + viewport indicator.
+// Renders the full world at a fixed scale, independent of camera zoom.
+// Overlays the current viewport as a rectangle (non-square when screen is not square).
 
 import { simState } from '../SimState';
 import { buildPanel } from './BrainPanel';
+import { Track } from '../Track';
 
-const MAP_W = 220;
-const MAP_H = 220;
+const MAP_SIZE = 220;
+const WORLD = Track.FIXED_SIZE; // 1200
+// Fixed scale: always maps the full 1200×1200 world to the MAP_SIZE canvas
+const MM_SCALE = MAP_SIZE / WORLD;
 
 export function createMinimapPanel(): HTMLElement {
-    const panel = buildPanel('minimap', '🗺 Minimap', 240, 265, 20, 500);
+    const panelW = MAP_SIZE + 16;
+    const panelH = MAP_SIZE + 16 + 34;
+    const panel = buildPanel('minimap', '🗺 Minimap', panelW, panelH, 20, 500);
+    panel.style.resize = 'none';
+
     const body = panel.querySelector('.panel-body') as HTMLElement;
     body.style.display = 'flex';
     body.style.alignItems = 'center';
@@ -17,26 +25,10 @@ export function createMinimapPanel(): HTMLElement {
 
     const canvas = document.createElement('canvas');
     canvas.id = 'minimap-canvas';
-    canvas.width = MAP_W;
-    canvas.height = MAP_H;
-    canvas.style.cssText = 'border-radius:6px;cursor:crosshair;background:#111;max-width:100%;max-height:100%;';
+    canvas.width = MAP_SIZE;
+    canvas.height = MAP_SIZE;
+    canvas.style.cssText = 'border-radius:6px;background:#111;display:block;';
     body.appendChild(canvas);
-
-    // Click on minimap → pan simulation camera
-    canvas.addEventListener('click', (e) => {
-        const sim = simState.simulationCanvas;
-        if (!sim) return;
-        const rect = canvas.getBoundingClientRect();
-        const nx = (e.clientX - rect.left) / rect.width;
-        const ny = (e.clientY - rect.top) / rect.height;
-
-        const simW = sim.width;
-        const simH = sim.height;
-        const { scale } = simState.camera;
-        // Centre camera on the clicked world point
-        simState.camera.tx = window.innerWidth / 2 - nx * simW * scale;
-        simState.camera.ty = window.innerHeight / 2 - ny * simH * scale;
-    });
 
     return panel;
 }
@@ -44,34 +36,40 @@ export function createMinimapPanel(): HTMLElement {
 export function updateMinimapPanel() {
     const panel = document.querySelector('[data-panel-id="minimap"]') as HTMLElement | null;
     if (!panel || panel.style.display === 'none' || panel.classList.contains('panel--minimized')) return;
+
     const mmCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
-    const sim = simState.simulationCanvas;
-    if (!mmCanvas || !sim) return;
+    const { ga, track, camera } = simState;
+    if (!mmCanvas || !ga || !track) return;
+
     const ctx = mmCanvas.getContext('2d');
     if (!ctx) return;
 
-    // Thumbnail of simulation
-    ctx.clearRect(0, 0, MAP_W, MAP_H);
-    ctx.drawImage(sim, 0, 0, MAP_W, MAP_H);
+    // ── Draw the world at fixed minimap scale ─────────────────────────────
+    ctx.fillStyle = '#0a0c10';
+    ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-    // Draw viewport rectangle
-    const { tx, ty, scale } = simState.camera;
+    ctx.save();
+    ctx.setTransform(MM_SCALE, 0, 0, MM_SCALE, 0, 0);
+    track.draw(ctx);
+    const best = ga.getBestActiveBoid();
+    for (const boid of ga.boids) {
+        boid.draw(ctx, boid === best);
+    }
+    ctx.restore();
+
+    // ── Overlay viewport rectangle ────────────────────────────────────────
+    // World coords of screen edges: wx = (screenX - camera.tx) / camera.scale
+    // Minimap coords: mx = wx * MM_SCALE
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const simW = sim.width;
-    const simH = sim.height;
+    const { tx, ty, scale } = camera;
 
-    // Screen → world: wx = (sx - tx) / scale
-    // World → minimap: mx = wx / simW * MAP_W
-    const toMapX = (sx: number) => ((sx - tx) / scale) / simW * MAP_W;
-    const toMapY = (sy: number) => ((sy - ty) / scale) / simH * MAP_H;
+    const rx = (-tx / scale) * MM_SCALE;
+    const ry = (-ty / scale) * MM_SCALE;
+    const rw = (vw / scale) * MM_SCALE;
+    const rh = (vh / scale) * MM_SCALE;
 
-    const rx = toMapX(0);
-    const ry = toMapY(0);
-    const rw = toMapX(vw) - rx;
-    const rh = toMapY(vh) - ry;
-
-    ctx.strokeStyle = 'rgba(99, 179, 255, 0.85)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(99, 179, 255, 0.9)';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(rx, ry, rw, rh);
 }
