@@ -42,6 +42,8 @@ export function createMinimapPanel(): HTMLElement {
 }
 
 export function updateMinimapPanel() {
+    const panel = document.querySelector('[data-panel-id="minimap"]') as HTMLElement | null;
+    if (!panel || panel.style.display === 'none' || panel.classList.contains('panel--minimized')) return;
     const mmCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
     const sim = simState.simulationCanvas;
     if (!mmCanvas || !sim) return;

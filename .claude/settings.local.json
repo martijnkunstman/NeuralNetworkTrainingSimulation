@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/mkunstman/NeuralNetworkTrainingSimulation/src/*.ts /c/Users/mkunstman/NeuralNetworkTrainingSimulation/src/panels/*.ts)"
+    ]
+  }
+}

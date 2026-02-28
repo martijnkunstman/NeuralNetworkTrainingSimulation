@@ -3,9 +3,9 @@
 
 import { simState } from '../SimState';
 import { GeneticAlgorithm } from '../AI';
-import { Track } from '../Track';
 import type { NeuralNetworkJSON } from '../brain-js';
 import { buildPanel } from './BrainPanel';
+import { resetChartData } from './ChartPanel';
 
 export function createSaveLoadPanel(): HTMLElement {
     const panel = buildPanel('saveload', '💾 Save / Load', 280, 310, window.innerWidth - 305, window.innerHeight - 330);
@@ -47,6 +47,7 @@ export function createSaveLoadPanel(): HTMLElement {
             track.startPoint.x, track.startPoint.y, track.startAngle,
         );
         simState.ga.generation = 1;
+        resetChartData();
         setStatus('Generation restarted.');
     });
 
@@ -61,6 +62,7 @@ export function createSaveLoadPanel(): HTMLElement {
             track.startPoint.x, track.startPoint.y, track.startAngle,
         );
         simState.ga.generation = 1;
+        resetChartData();
         setStatus('History cleared.');
     });
 

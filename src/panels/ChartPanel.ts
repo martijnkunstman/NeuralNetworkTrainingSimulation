@@ -44,6 +44,14 @@ export function createChartPanel(): HTMLElement {
     return panel;
 }
 
+/** Clear all chart history (call when restarting the GA). */
+export function resetChartData() {
+    fitnessData.length = 0;
+    aliveData.length = 0;
+    diversityData.length = 0;
+    lastGen = -1;
+}
+
 export function recordChartData() {
     const { ga } = simState;
     if (!ga || ga.generation === lastGen) return;
@@ -64,6 +72,8 @@ export function recordChartData() {
 }
 
 export function updateChartPanel() {
+    const panel = document.querySelector('[data-panel-id="chart"]') as HTMLElement | null;
+    if (!panel || panel.style.display === 'none' || panel.classList.contains('panel--minimized')) return;
     const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');

@@ -12,7 +12,6 @@ export interface PanelState {
 
 export class PanelManager {
     private panels: Map<string, HTMLElement> = new Map();
-    private zBase = 200;
     private zTop = 200;
 
     register(panel: HTMLElement): void {
@@ -71,6 +70,15 @@ export class PanelManager {
         btn.addEventListener('click', () => {
             const minimized = panel.classList.toggle('panel--minimized');
             btn.textContent = minimized ? '□' : '−';
+            if (minimized) {
+                // Collapse: record the full height so we can restore it later
+                panel.dataset.expandedHeight = String(panel.offsetHeight);
+                panel.style.height = '34px';
+            } else {
+                // Expand: restore the saved height
+                const h = panel.dataset.expandedHeight;
+                panel.style.height = h ? `${h}px` : '';
+            }
             this.savePanelState(panel);
         });
     }
@@ -115,12 +123,17 @@ export class PanelManager {
     // ── Persistence ───────────────────────────────────────────────────────────
     savePanelState(panel: HTMLElement) {
         const id = panel.dataset.panelId!;
+        const minimized = panel.classList.contains('panel--minimized');
+        // Always save the expanded height so we can restore it after un-minimizing
+        const expandedHeight = minimized
+            ? parseInt(panel.dataset.expandedHeight || '0') || panel.offsetHeight
+            : panel.offsetHeight;
         const state: PanelState = {
             left: parseInt(panel.style.left) || 0,
             top: parseInt(panel.style.top) || 0,
             width: panel.offsetWidth,
-            height: panel.offsetHeight,
-            minimized: panel.classList.contains('panel--minimized'),
+            height: expandedHeight,
+            minimized,
             visible: panel.style.display !== 'none',
         };
         localStorage.setItem(`panel_state_${id}`, JSON.stringify(state));
@@ -135,12 +148,16 @@ export class PanelManager {
             panel.style.left = `${s.left}px`;
             panel.style.top = `${s.top}px`;
             panel.style.width = `${s.width}px`;
-            panel.style.height = `${s.height}px`;
             panel.style.display = s.visible ? 'flex' : 'none';
             if (s.minimized) {
                 panel.classList.add('panel--minimized');
+                // Collapse to header height; remember expanded height for later restore
+                panel.dataset.expandedHeight = String(s.height);
+                panel.style.height = '34px';
                 const btn = panel.querySelector('.panel-btn-minimize') as HTMLButtonElement;
                 if (btn) btn.textContent = '□';
+            } else {
+                panel.style.height = `${s.height}px`;
             }
             // Sync toolbar button
             const btn = document.querySelector(`[data-toggle-panel="${id}"]`) as HTMLElement;

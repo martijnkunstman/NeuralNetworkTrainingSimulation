@@ -17,6 +17,7 @@ export interface SimState {
     camera: Camera;
     populationSize: number;
     isFastTraining: boolean;
+    isPaused: boolean;
     autoRandomizeTrack: boolean;
     randomizeInterval: number;
     fitnessHistory: number[];
@@ -34,6 +35,7 @@ export const simState: SimState = {
     camera: { tx: 0, ty: 0, scale: 1 },
     populationSize: 50,
     isFastTraining: false,
+    isPaused: false,
     autoRandomizeTrack: false,
     randomizeInterval: 10,
     fitnessHistory: [],

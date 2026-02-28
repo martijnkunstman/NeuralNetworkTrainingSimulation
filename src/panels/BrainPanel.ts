@@ -1,7 +1,7 @@
 // src/panels/BrainPanel.ts
 // Visualises the best boid's neural network. Hosts #network-canvas.
 
-import { drawNetwork } from '../AI';
+import { drawNetwork } from './NetworkRenderer';
 import { simState } from '../SimState';
 
 export function createBrainPanel(): HTMLElement {
@@ -24,6 +24,8 @@ export function createBrainPanel(): HTMLElement {
 }
 
 export function updateBrainPanel() {
+    const panel = document.querySelector('[data-panel-id="brain"]') as HTMLElement | null;
+    if (!panel || panel.style.display === 'none' || panel.classList.contains('panel--minimized')) return;
     const canvas = document.getElementById('network-canvas') as HTMLCanvasElement;
     if (!canvas || !simState.ga) return;
     const ctx = canvas.getContext('2d');

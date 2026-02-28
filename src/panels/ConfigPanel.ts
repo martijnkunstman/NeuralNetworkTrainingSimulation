@@ -75,8 +75,30 @@ export function createConfigPanel(): HTMLElement {
 
     wireSlider(body, 'cfg-pop-size', 'cfg-pop-size-val', (v) => { simState.populationSize = v; });
     wireSlider(body, 'cfg-mutation', 'cfg-mutation-val', (v) => { if (simState.ga) simState.ga.mutationRate = v; }, 2);
-    wireSlider(body, 'cfg-tournament', 'cfg-tournament-val', (v) => { if (simState.ga) simState.ga.tournamentSize = v; });
-    wireSlider(body, 'cfg-elite', 'cfg-elite-val', (v) => { if (simState.ga) simState.ga.eliteCount = v; });
+    wireSlider(body, 'cfg-tournament', 'cfg-tournament-val', (v) => {
+        if (!simState.ga) return;
+        // Tournament size must be smaller than population size to avoid infinite loops
+        const clamped = Math.min(v, simState.populationSize - 1);
+        simState.ga.tournamentSize = clamped;
+        if (clamped !== v) {
+            const slider = body.querySelector('#cfg-tournament') as HTMLInputElement;
+            const valEl = body.querySelector('#cfg-tournament-val');
+            if (slider) slider.value = String(clamped);
+            if (valEl) valEl.textContent = String(clamped);
+        }
+    });
+    wireSlider(body, 'cfg-elite', 'cfg-elite-val', (v) => {
+        if (!simState.ga) return;
+        // Elite count must leave room for at least one crossover child
+        const clamped = Math.min(v, simState.populationSize - 2);
+        simState.ga.eliteCount = clamped;
+        if (clamped !== v) {
+            const slider = body.querySelector('#cfg-elite') as HTMLInputElement;
+            const valEl = body.querySelector('#cfg-elite-val');
+            if (slider) slider.value = String(clamped);
+            if (valEl) valEl.textContent = String(clamped);
+        }
+    });
     wireSlider(body, 'cfg-lifespan', 'cfg-lifespan-val', (v) => { if (simState.ga) simState.ga.maxLifespan = v; });
 
     body.querySelector('#cfg-btn-randomize')?.addEventListener('click', () => {
@@ -107,6 +129,8 @@ export function createConfigPanel(): HTMLElement {
 }
 
 export function updateConfigPanel() {
+    const panel = document.querySelector('[data-panel-id="config"]') as HTMLElement | null;
+    if (!panel || panel.style.display === 'none') return;
     const seedEl = document.getElementById('cfg-track-seed');
     if (seedEl && simState.track) {
         seedEl.textContent = simState.track.seed === 0 ? 'Default' : String(simState.track.seed);

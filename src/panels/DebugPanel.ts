@@ -6,7 +6,13 @@ import { buildPanel } from './BrainPanel';
 
 const MAX_LOG_LINES = 200;
 let logLines: string[] = [];
-let logCaptured = false;
+
+/** Write a message to the Debug panel's log textarea. */
+export function debugLog(...args: unknown[]) {
+    const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    logLines.push(`[log] ${line}`);
+    if (logLines.length > MAX_LOG_LINES * 2) logLines = logLines.slice(-MAX_LOG_LINES);
+}
 
 export function createDebugPanel(): HTMLElement {
     const panel = buildPanel('debug', '🐛 Debug', 320, 380, 390, 60);
@@ -38,11 +44,12 @@ export function createDebugPanel(): HTMLElement {
         if (ta) ta.value = '';
     });
 
-    captureConsole();
     return panel;
 }
 
 export function updateDebugPanel() {
+    const panel = document.querySelector('[data-panel-id="debug"]') as HTMLElement | null;
+    if (!panel || panel.style.display === 'none') return;
     const { ga, fps } = simState;
     if (!ga) return;
 
@@ -98,14 +105,3 @@ function setText(id: string, v: string) {
     if (el) el.textContent = v;
 }
 
-function captureConsole() {
-    if (logCaptured) return;
-    logCaptured = true;
-    const orig = console.log.bind(console);
-    console.log = (...args: unknown[]) => {
-        orig(...args);
-        const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-        logLines.push(`[log] ${line}`);
-        if (logLines.length > MAX_LOG_LINES * 2) logLines = logLines.slice(-MAX_LOG_LINES);
-    };
-}

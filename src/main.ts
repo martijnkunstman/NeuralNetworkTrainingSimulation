@@ -115,6 +115,16 @@ function init() {
   document.getElementById('btn-zoom-reset')?.addEventListener('click', fitCameraToViewport);
   document.getElementById('btn-reset-panels')?.addEventListener('click', resetPanelLayout);
 
+  // ── Pause / Resume ──────────────────────────────────────────────────────
+  const pauseBtn = document.getElementById('btn-pause') as HTMLButtonElement | null;
+  pauseBtn?.addEventListener('click', () => {
+    simState.isPaused = !simState.isPaused;
+    if (pauseBtn) {
+      pauseBtn.textContent = simState.isPaused ? '▶ Resume' : '⏸ Pause';
+      pauseBtn.classList.toggle('toolbar-btn--active', simState.isPaused);
+    }
+  });
+
   // ── Zoom (scroll wheel) ─────────────────────────────────────────────────
   simCanvas.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -239,7 +249,10 @@ function trackFps(now: number) {
 function loop(now: number) {
   trackFps(now);
 
-  if (simState.isFastTraining) {
+  if (simState.isPaused) {
+    // Paused: keep canvas live but skip simulation update
+    draw();
+  } else if (simState.isFastTraining) {
     for (let i = 0; i < 20; i++) update();
     // Minimal draw in fast mode
     const simCanvas = simState.simulationCanvas;
