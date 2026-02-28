@@ -29,6 +29,7 @@ export function createSaveLoadPanel(): HTMLElement {
     <div class="sl-section">
       <div class="sl-title">Generation</div>
       <button id="sl-btn-restart">↩ Restart Generation</button>
+      <button id="sl-btn-load-preset">🧬 New Sim from brain1.json</button>
       <button id="sl-btn-clear" class="sl-btn-danger">🗑 Clear History</button>
     </div>
     <div id="sl-status" style="font-size:0.78rem;color:#888;min-height:18px;"></div>
@@ -51,6 +52,32 @@ export function createSaveLoadPanel(): HTMLElement {
         simState.ga.generation = 1;
         setCurrentRunStartGen(1);
         setStatus('Generation restarted.');
+    });
+
+    body.querySelector('#sl-btn-load-preset')?.addEventListener('click', () => {
+        if (!confirm('Start a completely new simulation seeded from brain1.json?')) return;
+        const { ga, track } = simState;
+        if (ga) finalizeRun(ga);
+        clearRunHistory();
+        resetChartData();
+        localStorage.removeItem('best_boid_brain');
+        localStorage.removeItem('current_generation');
+        if (!track) return;
+        fetch('./brain1.json')
+            .then(r => r.json())
+            .then((data: { network?: object }) => {
+                if (!data.network) { setStatus('❌ brain1.json missing network'); return; }
+                simState.ga = new GeneticAlgorithm(
+                    simState.populationSize,
+                    track.startPoint.x, track.startPoint.y, track.startAngle,
+                );
+                simState.ga.generation = 1;
+                setCurrentRunStartGen(1);
+                simState.ga.boids[0].network.fromJSON(data.network as NeuralNetworkJSON);
+                localStorage.setItem('best_boid_brain', JSON.stringify(data.network));
+                setStatus('✅ New sim started from brain1.json');
+            })
+            .catch(() => setStatus('❌ Could not load brain1.json'));
     });
 
     body.querySelector('#sl-btn-clear')?.addEventListener('click', () => {
