@@ -393,7 +393,7 @@ export class Track {
 
         // Try to generate a valid track (no self-intersections or wall intersections)
         let attempts = 0;
-        const maxAttempts = 50;
+        const maxAttempts = 250;
         let validFound = false;
 
         while (attempts < maxAttempts) {
