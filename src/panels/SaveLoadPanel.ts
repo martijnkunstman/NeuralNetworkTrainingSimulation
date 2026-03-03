@@ -6,6 +6,8 @@ import { GeneticAlgorithm } from '../AI';
 import type { NeuralNetworkJSON } from '../brain-js';
 import { buildPanel } from './BrainPanel';
 import { resetChartData, finalizeRun, setCurrentRunStartGen, clearRunHistory } from './ChartPanel';
+import { seedRng, random } from '../rng';
+import { applyPendingSeed } from './ConfigPanel';
 
 export function createSaveLoadPanel(): HTMLElement {
     const panel = buildPanel('saveload', '💾 Save / Load', 280, 310, window.innerWidth - 305, window.innerHeight - 330);
@@ -67,6 +69,11 @@ export function createSaveLoadPanel(): HTMLElement {
             .then(r => r.json())
             .then((data: { network?: object }) => {
                 if (!data.network) { setStatus('❌ brain1.json missing network'); return; }
+                applyPendingSeed();
+                const actualSeed = seedRng(simState.simulationSeed);
+                simState.simulationSeed = actualSeed;
+                const newTrackSeed = Math.floor(random() * 1000000) + 1;
+                track.generateSimpleLoopedTrack(1200, 1200, newTrackSeed);
                 simState.ga = new GeneticAlgorithm(
                     simState.populationSize,
                     track.startPoint.x, track.startPoint.y, track.startAngle,
@@ -89,6 +96,11 @@ export function createSaveLoadPanel(): HTMLElement {
         localStorage.removeItem('best_boid_brain');
         localStorage.removeItem('current_generation');
         if (!track) return;
+        applyPendingSeed();
+        const actualSeed = seedRng(simState.simulationSeed);
+        simState.simulationSeed = actualSeed;
+        const newTrackSeed = Math.floor(random() * 1000000) + 1;
+        track.generateSimpleLoopedTrack(1200, 1200, newTrackSeed);
         simState.ga = new GeneticAlgorithm(
             simState.populationSize,
             track.startPoint.x, track.startPoint.y, track.startAngle,
@@ -148,6 +160,7 @@ function saveSession() {
     const data = {
         generation: ga.generation,
         trackSeed: track.seed,
+        simulationSeed: simState.simulationSeed,
         bestBrainJSON: best ? best.network.toJSON() : null,
         savedAt: new Date().toISOString(),
     };
@@ -161,6 +174,15 @@ function loadSession() {
             const data = JSON.parse(await file.text());
             const { ga } = simState;
             if (!ga) return;
+            if (data.simulationSeed) {
+                simState.simulationSeed = data.simulationSeed;
+                seedRng(data.simulationSeed);
+                // Advance past the "initial track seed" call so subsequent PRNG is at the right offset
+                random();
+                // Sync the seed input in ConfigPanel to match the restored seed
+                const seedInput = document.getElementById('cfg-seed-input') as HTMLInputElement | null;
+                if (seedInput) seedInput.value = String(data.simulationSeed);
+            }
             if (data.generation) ga.generation = data.generation;
             if (data.bestBrainJSON) {
                 ga.boids[0].network.fromJSON(data.bestBrainJSON);

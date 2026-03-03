@@ -3,6 +3,7 @@ import '../style.css';
 import { Track } from './Track';
 import { GeneticAlgorithm } from './AI';
 import { simState } from './SimState';
+import { seedRng, random } from './rng';
 import { PanelManager } from './PanelManager';
 import { createBrainPanel, updateBrainPanel } from './panels/BrainPanel';
 import { createMinimapPanel, updateMinimapPanel } from './panels/MinimapPanel';
@@ -104,8 +105,11 @@ function init() {
   fitCameraToViewport();
   simState.fitCamera = fitCameraToViewport;
 
-  // Build simulation objects
-  const track = new Track(FIXED_SIZE, FIXED_SIZE);
+  // Build simulation objects — seed PRNG first so Track + GA are deterministic
+  const actualSeed = seedRng(simState.simulationSeed);
+  simState.simulationSeed = actualSeed;
+  const initialTrackSeed = Math.floor(random() * 1000000) + 1;
+  const track = new Track(FIXED_SIZE, FIXED_SIZE, initialTrackSeed);
   const ga = new GeneticAlgorithm(POPULATION_SIZE, track.startPoint.x, track.startPoint.y, track.startAngle);
   simState.track = track;
   simState.ga = ga;

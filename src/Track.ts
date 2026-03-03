@@ -1,5 +1,6 @@
 // src/Track.ts
 import { Vector } from './Vector';
+import { random } from './rng';
 
 /**
  * Seeded pseudo-random number generator (Mulberry32)
@@ -452,7 +453,7 @@ export class Track {
      * Regenerate track with a new random seed
      */
     randomize(w: number, h: number): number {
-        const newSeed = Math.floor(Math.random() * 1000000) + 1;
+        const newSeed = Math.floor(random() * 1000000) + 1;
         this.generateSimpleLoopedTrack(w, h, newSeed);
         return newSeed;
     }

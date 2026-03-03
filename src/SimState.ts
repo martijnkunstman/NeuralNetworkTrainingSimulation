@@ -18,6 +18,7 @@ export interface SimState {
     populationSize: number;
     isFastTraining: boolean;
     isPaused: boolean;
+    simulationSeed: number;
     isEditingTrack: boolean;
     trackDragIndex: number;
     autoRandomizeTrack: boolean;
@@ -39,6 +40,7 @@ export const simState: SimState = {
     populationSize: 50,
     isFastTraining: false,
     isPaused: false,
+    simulationSeed: 42,
     isEditingTrack: false,
     trackDragIndex: -1,
     autoRandomizeTrack: false,

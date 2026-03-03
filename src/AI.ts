@@ -2,6 +2,7 @@
 import { Boid } from './Boid';
 import { Track } from './Track';
 import type { NeuralNetworkJSON } from './brain-js';
+import { random } from './rng';
 
 export class GeneticAlgorithm {
     populationSize: number = 50;
@@ -87,7 +88,7 @@ export class GeneticAlgorithm {
     selectParent(): Boid {
         let best: Boid | null = null;
         for (let i = 0; i < this.tournamentSize; i++) {
-            const idx = Math.floor(Math.random() * this.boids.length);
+            const idx = Math.floor(random() * this.boids.length);
             const candidate = this.boids[idx];
             if (!best || candidate.fitness > best.fitness) {
                 best = candidate;
@@ -114,7 +115,7 @@ export class GeneticAlgorithm {
                 for (let j = 0; j < childLayer.weights.length; j++) {
                     for (let k = 0; k < childLayer.weights[j].length; k++) {
                         // Arithmetic crossover with random blend factor
-                        const blend = Math.random();
+                        const blend = random();
                         childLayer.weights[j][k] = (childLayer.weights[j][k] * blend) + 
                                                     (p2Layer.weights[j][k] * (1 - blend));
                     }
@@ -124,7 +125,7 @@ export class GeneticAlgorithm {
             // Crossover biases
             if (childLayer.biases && p2Layer?.biases) {
                 for (let j = 0; j < childLayer.biases.length; j++) {
-                    const blend = Math.random();
+                    const blend = random();
                     childLayer.biases[j] = (childLayer.biases[j] * blend) + 
                                            (p2Layer.biases[j] * (1 - blend));
                 }
@@ -206,16 +207,16 @@ export class GeneticAlgorithm {
 
             for (let j = 0; j < layer.weights.length; j++) {
                 for (let k = 0; k < layer.weights[j].length; k++) {
-                    if (Math.random() < rate) {
-                        layer.weights[j][k] += (Math.random() * 2 - 1); // Mutate by adding -1 to 1
+                    if (random() < rate) {
+                        layer.weights[j][k] += (random() * 2 - 1); // Mutate by adding -1 to 1
                     }
                 }
             }
 
             if (layer.biases) {
                 for (let j = 0; j < layer.biases.length; j++) {
-                    if (Math.random() < rate) {
-                        layer.biases[j] += (Math.random() * 2 - 1);
+                    if (random() < rate) {
+                        layer.biases[j] += (random() * 2 - 1);
                     }
                 }
             }
@@ -249,7 +250,7 @@ export class GeneticAlgorithm {
         const samples: NeuralNetworkJSON[] = [];
         
         for (let i = 0; i < sampleSize; i++) {
-            const idx = Math.floor(Math.random() * this.boids.length);
+            const idx = Math.floor(random() * this.boids.length);
             samples.push(this.boids[idx].network.toJSON() as NeuralNetworkJSON);
         }
 

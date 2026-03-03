@@ -3,6 +3,7 @@ import { Vector } from './Vector';
 import { getIntersection } from './utils';
 import { Track } from './Track';
 import type { NeuralNetwork } from './brain-js';
+import { random } from './rng';
 
 export class Boid {
     pos: Vector;
@@ -73,12 +74,12 @@ export class Boid {
             for (let j = 0; j < layer.weights.length; j++) {
                 for (let k = 0; k < layer.weights[j].length; k++) {
                     // Random weights between -2 and 2
-                    layer.weights[j][k] = (Math.random() * 4) - 2;
+                    layer.weights[j][k] = (random() * 4) - 2;
                 }
             }
             if (layer.biases) {
                 for (let j = 0; j < layer.biases.length; j++) {
-                    layer.biases[j] = (Math.random() * 4) - 2;
+                    layer.biases[j] = (random() * 4) - 2;
                 }
             }
         }

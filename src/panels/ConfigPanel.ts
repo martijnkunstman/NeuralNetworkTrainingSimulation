@@ -4,6 +4,13 @@
 import { simState } from '../SimState';
 import { buildPanel } from './BrainPanel';
 
+// Tracks the seed the user has typed but not yet applied (applied on Clear/full restart)
+let pendingSeed: number = simState.simulationSeed;
+
+export function applyPendingSeed(): void {
+    simState.simulationSeed = pendingSeed;
+}
+
 export function createConfigPanel(): HTMLElement {
     const panel = buildPanel('config', '⚙️ Config', 300, 400, window.innerWidth - 325, 330);
     const body = panel.querySelector('.panel-body') as HTMLElement;
@@ -69,6 +76,23 @@ export function createConfigPanel(): HTMLElement {
     </div>
 
     <div class="cfg-section">
+      <div class="cfg-label">Simulation Seed</div>
+      <div class="cfg-row-v">
+        <div style="font-size:0.8rem;color:#888;margin-bottom:4px;">
+          Active: <span id="cfg-active-seed">${simState.simulationSeed}</span>
+          <span id="cfg-pending-badge" style="display:none;color:#f59e0b;margin-left:6px;">(pending: <span id="cfg-pending-seed-val"></span>)</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" id="cfg-seed-input" min="1" max="4294967295"
+                 value="${simState.simulationSeed}"
+                 style="width:110px;background:#1a1a2e;border:1px solid #333;color:#ddd;border-radius:4px;padding:3px 6px;font-size:0.85rem;">
+          <button id="cfg-btn-new-seed" style="font-size:0.8rem;padding:3px 8px;">🎲 Random</button>
+        </div>
+        <div style="font-size:0.75rem;color:#666;margin-top:4px;">Takes effect on next Clear / full restart</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
       <button id="cfg-btn-fast" class="cfg-btn-danger">⚡ Toggle Fast Training</button>
     </div>
   `;
@@ -125,6 +149,29 @@ export function createConfigPanel(): HTMLElement {
         fastBtn.textContent = simState.isFastTraining ? '🐢 Toggle Normal Viz' : '⚡ Toggle Fast Training';
     });
 
+    const seedInput = body.querySelector('#cfg-seed-input') as HTMLInputElement;
+    const pendingBadge = body.querySelector('#cfg-pending-badge') as HTMLElement;
+    const pendingSeedValEl = body.querySelector('#cfg-pending-seed-val') as HTMLElement;
+
+    const updatePendingBadge = () => {
+        const diff = pendingSeed !== simState.simulationSeed;
+        pendingBadge.style.display = diff ? 'inline' : 'none';
+        pendingSeedValEl.textContent = String(pendingSeed);
+    };
+
+    seedInput?.addEventListener('input', () => {
+        const v = parseInt(seedInput.value);
+        if (!isNaN(v) && v >= 1) pendingSeed = v;
+        updatePendingBadge();
+    });
+
+    body.querySelector('#cfg-btn-new-seed')?.addEventListener('click', () => {
+        // Intentional Math.random() here — this is a UI convenience action, not simulation randomness
+        pendingSeed = Math.floor(Math.random() * 0xFFFFFFFE) + 1;
+        seedInput.value = String(pendingSeed);
+        updatePendingBadge();
+    });
+
     return panel;
 }
 
@@ -135,6 +182,8 @@ export function updateConfigPanel() {
     if (seedEl && simState.track) {
         seedEl.textContent = simState.track.seed === 0 ? 'Default' : String(simState.track.seed);
     }
+    const activeSeedEl = document.getElementById('cfg-active-seed');
+    if (activeSeedEl) activeSeedEl.textContent = String(simState.simulationSeed);
 }
 
 function wireSlider(
